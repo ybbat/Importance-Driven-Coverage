@@ -1,17 +1,19 @@
 import functools
 import os
-from typing import Callable
+from typing import Any, Callable
 
 import torch
 
 
-def file_saveloader(filepath: str) -> Callable:
+def file_saveloader(filepath: str, key: Any) -> Callable:
     """
     A decorator that saves or loads function results to/from a .pt file.
-    Only one combination of function arguments is saved per file for memory reasons.
+    File may save one key:value pair.
+    Currently very naive, suggested to delete the file if recalculation is vital.
 
     Args:
         filepath (str): The path to the file where the function results will be saved.
+        key (Any): The key to save the function results under.
 
     Returns:
         function: The decorated function.
@@ -20,13 +22,12 @@ def file_saveloader(filepath: str) -> Callable:
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            call = (func.__name__, args, kwargs)
             if os.path.exists(filepath):
                 val = torch.load(filepath)
-                if val["call"] == call:
+                if val["key"] == str(key):
                     return val["return"]
             ret = func(*args, **kwargs)
-            torch.save({"call": call, "return": ret}, filepath)
+            torch.save({"key": str(key), "return": ret}, filepath)
             return ret
 
         return wrapper

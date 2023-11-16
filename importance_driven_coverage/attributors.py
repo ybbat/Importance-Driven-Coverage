@@ -17,7 +17,6 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-
 AttributorType = Callable[[nn.Module, DataLoader, nn.Module], torch.Tensor]
 
 
