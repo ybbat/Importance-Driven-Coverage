@@ -1,4 +1,5 @@
-from typing import Optional, Tuple
+import itertools
+from typing import Callable, Optional, Tuple
 
 import torch
 from torch import nn
@@ -24,6 +25,7 @@ class ImportanceDrivenCoverage:
         test_data: DataLoader,
         layer: nn.Module,
         n: int,
+        transform: Optional[Callable] = None,
         attributions_path: Optional[str] = None,
         centroids_path: Optional[str] = None,
     ) -> Tuple[float, set]:
@@ -35,27 +37,54 @@ class ImportanceDrivenCoverage:
 
         attributions = attributor(self.model, train_data, layer)
 
+        indices = attributions.ravel().topk(n).indices
+
         centroids_func = (
             self.get_centroids
             if centroids_path is None
             else file_saveloader(centroids_path, (layer, n))(self.get_centroids)
         )
 
-        centroids = centroids_func(attributions, train_data, layer, n)
+        centroids = centroids_func(attributions, train_data, layer, indices)
 
-        return (0.0, set())
+        activations = self.activations(test_data, self.model, indices, transform).to(
+            "cpu"
+        )
+
+        covered_combs = set()
+
+        Y = range(len(test_data.dataset))  # type: ignore
+
+        for y in Y:
+            covered = []
+            for i in range(n):
+                a = activations[y, i]
+
+                closest = min(centroids[i], key=lambda x: abs(x - a.squeeze()))
+                covered.append(closest)
+
+            covered_combs.add(tuple(covered))
+
+        all_combs = set(itertools.product(*centroids))
+        return float(len(covered_combs)) / len(all_combs), covered_combs
 
     def get_centroids(
-        self, attributions: torch.Tensor, data: DataLoader, layer: nn.Module, n: int
+        self,
+        data: DataLoader,
+        layer: nn.Module,
+        indices: torch.Tensor,
     ) -> list[list[float]]:
-        top_n = attributions.ravel().topk(n).indices
-        acts = self.get_activations(data, layer, top_n)
+        acts = self.activations(data, layer, indices)
 
         centroids = self.clusterer(acts)
         return centroids
 
-    def get_activations(
-        self, data: DataLoader, layer: nn.Module, indices: torch.Tensor
+    def activations(
+        self,
+        data: DataLoader,
+        layer: nn.Module,
+        indices: torch.Tensor,
+        transform: Optional[Callable] = None,
     ) -> torch.Tensor:
         acts = []
 
@@ -66,6 +95,10 @@ class ImportanceDrivenCoverage:
             handle = layer.register_forward_hook(hook)
             for X, y in data:
                 X, y = X.to(self.device), y.to(self.device)
+
+                if transform is not None:
+                    X = transform(X)
+
                 self.model(X)
         finally:
             handle.remove()
