@@ -45,6 +45,8 @@ class ImportanceDrivenCoverage:
         self.clusterer = clusterer
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.total_combs: set = set()
+
     def calculate(
         self,
         train_data: DataLoader,
@@ -54,6 +56,7 @@ class ImportanceDrivenCoverage:
         transform: Optional[Callable] = None,
         attributions_path: Optional[str] = None,
         centroids_path: Optional[str] = None,
+        layer_input: bool = False,
     ) -> Tuple[float, set]:
         """
         Calculates the importance-driven coverage of a given layer in a neural network.
@@ -86,11 +89,11 @@ class ImportanceDrivenCoverage:
             else file_saveloader(centroids_path, (layer, n))(self.get_centroids)
         )
 
-        centroids = centroids_func(attributions, train_data, layer, indices)
+        centroids = centroids_func(train_data, layer, indices, layer_input)
 
-        activations = self.activations(test_data, self.model, indices, transform).to(
-            "cpu"
-        )
+        activations = self.activations(
+            test_data, layer, indices, layer_input, transform
+        ).to("cpu")
 
         covered_combs = set()
 
@@ -106,18 +109,19 @@ class ImportanceDrivenCoverage:
 
             covered_combs.add(tuple(covered))
 
-        all_combs = set(itertools.product(*centroids))
-        return float(len(covered_combs)) / len(all_combs), covered_combs
+        return float(len(covered_combs)) / len(self.total_combs), covered_combs
 
     def get_centroids(
         self,
         data: DataLoader,
         layer: nn.Module,
         indices: torch.Tensor,
+        layer_input: bool,
     ) -> list[list[float]]:
-        acts = self.activations(data, layer, indices)
+        acts = self.activations(data, layer, indices, layer_input)
 
         centroids = self.clusterer(acts)
+        self.total_combs = set(itertools.product(*centroids))
         return centroids
 
     def activations(
@@ -125,12 +129,18 @@ class ImportanceDrivenCoverage:
         data: DataLoader,
         layer: nn.Module,
         indices: torch.Tensor,
+        layer_input: bool,
         transform: Optional[Callable] = None,
     ) -> torch.Tensor:
         acts = []
 
         def hook(module, input, output):
-            acts.append(output.detach())
+            if layer_input:
+                # TODO: input is a tuple, some modules have multiple inputs
+                # unsure what to do in this case, for now just take the first input
+                acts.append(input[0].detach())
+            else:
+                acts.append(output.detach())
 
         try:
             handle = layer.register_forward_hook(hook)

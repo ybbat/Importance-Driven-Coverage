@@ -25,6 +25,7 @@ def CaptumLRPAttributor(
     cons_kwargs: Optional[dict[Any, Any]] = {},
     attribute_args: Optional[tuple[Any, ...]] = (),
     attribute_kwargs: Optional[dict[Any, Any]] = {},
+    device: Optional[str] = "cuda" if torch.cuda.is_available() else "cpu",
 ) -> AttributorType:
     """
     Returns a function that computes Layer-wise Relevance Propagation (LRP) attributions
@@ -35,13 +36,13 @@ def CaptumLRPAttributor(
         cons_kwargs (Optional[Dict[Any, Any]], optional): Keyword arguments to be passed to the constructor of the attribution method. Defaults to None.
         attribute_args (Optional[Tuple[Any, ...]], optional): Arguments to be passed to the attribute method of the attribution method. Defaults to None.
         attribute_kwargs (Optional[Dict[Any, Any]], optional): Keyword arguments to be passed to the attribute method of the attribution method. Defaults to None.
+        device (Optional[str], optional): Device to be used for the computation. Defaults to "cuda" if available else "cpu".
 
     Returns:
         AttributorType: A function that takes a model, data and layer as input and returns the LRP attributions.
     """
 
     def func(model: nn.Module, data: DataLoader, layer: nn.Module) -> torch.Tensor:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         attr = captum.attr.LayerLRP(model, layer, *cons_args, **cons_kwargs)
 
         ret = None
