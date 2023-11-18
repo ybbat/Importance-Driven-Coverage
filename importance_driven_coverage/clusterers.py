@@ -30,6 +30,7 @@ def simple_silhouette_score(
 ) -> float:
     """
     Compute the simple silhouette score for a clustering given the data, labels, and centroids.
+    Regular silhouette score can be used but it is much more computationally expensive.
     https://en.wikipedia.org/wiki/Silhouette_(clustering)#Simplified_Silhouette_and_Medoid_Silhouette
 
     Args:
@@ -80,7 +81,7 @@ def KMeansClustererSimpleSilhouette(maxk=8) -> ClustererType:
             best_score = -1.0
             best_centroids = np.array([])
             for k in range(2, maxk + 1):
-                kmeans = cluster.KMeans(n_clusters=4, n_init="auto")
+                kmeans = cluster.KMeans(n_clusters=k, n_init="auto")
                 clustered = kmeans.fit_predict(acts)
                 centroids = kmeans.cluster_centers_.squeeze()
                 if (
