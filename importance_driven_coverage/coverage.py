@@ -69,6 +69,7 @@ class ImportanceDrivenCoverage:
             transform (Optional[Callable], optional): A function to transform the test data. Defaults to None.
             attributions_path (Optional[str], optional): The path to save/load attributions. Defaults to None.
             centroids_path (Optional[str], optional): The path to save/load centroids. Defaults to None.
+            layer_input (bool, optional): Whether to use the layer input or output for computing coverage. Defaults to False.
 
         Returns:
             Tuple[float, set]: A tuple containing the coverage score and the set of covered combinations.
@@ -90,6 +91,7 @@ class ImportanceDrivenCoverage:
         )
 
         centroids = centroids_func(train_data, layer, indices, layer_input)
+        self.total_combs = set(itertools.product(*centroids))
 
         activations = self.activations(
             test_data, layer, indices, layer_input, transform
@@ -121,7 +123,6 @@ class ImportanceDrivenCoverage:
         acts = self.activations(data, layer, indices, layer_input)
 
         centroids = self.clusterer(acts)
-        self.total_combs = set(itertools.product(*centroids))
         return centroids
 
     def activations(
